@@ -1,0 +1,57 @@
+#!/bin/bash
+# This is install Simple nginx test script
+#布置nginx环境
+yum -y install gcc  pcre-devel &> /dev/null
+yum -y install mariadb mariadb-server mariadb-devel php php-fpm php-mysql &> /dev/null
+
+#下载nginx
+wget http://nginx.org/download/nginx-1.12.0.tar.gz  &> /dev/null
+wget http://mirror.centos.org/centos/6/os/x86_64/Packages/openssl-devel-1.0.1e-57.el6.x86_64.rpm &> /dev/null
+yum -y install openssl-devel-1.0.1e-57.el6.x86_64.rpm &> /dev/null
+
+#解压nginx压缩包
+gunzip nginx-1.12.0.tar.gz
+tar -xf nginx-1.12.0.tar
+
+#编译安装nginx
+cd nginx-1.12.0
+useradd -s /sbin/nologin nginx
+./configure  --user=nginx --group=nginx --with-http_ssl_module --with-stream &> /dev/null
+make && make install &> /dev/null
+
+#动静分离修改配置，默认是注释的，需要打开
+sed -i '65,71s/#//' /usr/local/nginx/conf/nginx.conf
+
+#删除这一行没用
+sed -i '/SCRIPT_FILENAME/d' /usr/local/nginx/conf/nginx.conf
+#是访问文件动静分离
+sed -i '/fastcgi_params/ s/fastcgi_params/fastcgi.conf/' /usr/local/nginx/conf/nginx.conf
+
+#测试动态脚本是否能运行
+echo '<?php
+$i=123;
+echo $i;
+?>' > /usr/local/nginx/html/test.php
+
+#配置nginx集群（首先确保开启了stream模块）
+#echo 'upstream server {
+#server 主机IP weight=2 fail_time=20s;
+#}' >  /usr/local/nginx/conf/nginx.conf
+sed '32a upstream server {
+server 主机IP weight=2 fail_time=20s;
+}' /usr/local/nginx/conf/nginx.conf
+
+#修改解释器，使动态网页能被9000端口解析出来
+sed -i '45s/index.html/index.php/' /usr/local/nginx/conf/nginx.conf
+
+#启动nginx服务（也可以做软连接）
+#ln -s /usr/local/nginx/sbin/nginx /sbin/ 
+/usr/local/nginx/sbin/nginx
+
+#判断
+if [ $? -eq 0 ]; then
+echo '执行成功'
+else
+echo ’请检查配置‘
+fi
+#
